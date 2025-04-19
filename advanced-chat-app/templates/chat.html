@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>伪造（谣言）检测 - 智能对话</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --secondary: #6C5CE7;
+            --accent: #00CEC9;
+        }
+
+        body {
+            font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e6f0ff 100%);
+            margin: 0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        .bg-pattern {
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            background:
+                radial-gradient(circle at 10% 20%, rgba(74,144,226,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 90% 80%, rgba(108,92,231,0.1) 0%, transparent 50%);
+            animation: float 20s infinite linear;
+            z-index: -1;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0,0); }
+            33% { transform: translate(-5%,5%); }
+            66% { transform: translate(5%,-5%); }
+            100% { transform: translate(0,0); }
+        }
+
+        /* 左侧谣言检测系统样式 */
+        .detection-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .chat-header {
+            font-size: 1.8rem;
+            color: var(--secondary);
+            padding: 1.5rem;
+            text-align: center;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+            position: relative;
+        }
+
+        .chat-header i {
+            margin-right: 10px;
+            color: var(--accent);
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.8);
+        }
+
+        .message {
+            padding: 1.2rem;
+            margin: 1rem 0;
+            border-radius: 1rem;
+            max-width: 80%;
+            position: relative;
+            animation: fadeIn 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background: var(--primary);
+            color: white;
+            margin-left: auto;
+            border-radius: 1rem 1rem 0 1rem;
+            transition: transform 0.2s;
+        }
+
+        .user-message:hover {
+            transform: translateX(-5px);
+        }
+
+        .bot-message {
+            background: rgba(0, 206, 201, 0.1);
+            border: 1px solid rgba(0, 206, 201, 0.2);
+            margin-right: auto;
+            border-radius: 1rem 1rem 1rem 0;
+            transition: transform 0.2s;
+        }
+
+        .bot-message:hover {
+            transform: translateX(5px);
+        }
+
+        .chat-input-area {
+            padding: 1.5rem;
+            border-top: 2px solid rgba(0, 0, 0, 0.05);
+            background: rgba(255,255,255,0.9);
+        }
+
+        .timestamp {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 0.5rem;
+            display: block;
+        }
+
+        .bot-message .timestamp {
+            color: rgba(0,0,0,0.5);
+        }
+
+        .confidence-meter {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .bot-message .confidence-meter {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .confidence-meter div {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.5s ease;
+        }
+
+        /* 输入区域样式 */
+        .upload-area {
+            border: 2px dashed var(--primary);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            background: rgba(255,255,255,0.7);
+        }
+
+        .upload-area:hover {
+            background: rgba(255,255,255,0.9);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--accent);
+            background: rgba(0, 206, 201, 0.05);
+            transform: scale(1.01);
+        }
+
+        textarea {
+            width: 90%;
+            padding: 1.2rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 0.8rem;
+            resize: vertical;
+            font-size: 1rem;
+            transition: all 0.3s;
+            min-height: 120px;
+            background: rgba(255,255,255,0.9);
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
+            background: white;
+        }
+
+        .file-input {
+            position: relative;
+            margin: 1.5rem 0;
+        }
+
+        .file-input input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-button {
+            background: var(--primary);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 0.6rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.8rem;
+            transition: all 0.3s;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .custom-file-button:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 92, 231, 0.3);
+        }
+
+        .custom-file-button i {
+            font-size: 1.1rem;
+        }
+
+        #send-button {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            width: 100%;
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        #send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 92, 231, 0.3);
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+        }
+
+        #send-button i {
+            font-size: 1.2rem;
+        }
+
+        .file-selected {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--secondary);
+            display: none;
+            font-weight: 500;
+        }
+
+        /* 右侧搜索系统样式 */
+        .search-container {
+            width: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .search-container.active {
+            width: 40%;
+            min-width: 400px;
+        }
+
+        .search-header {
+            font-size: 1.8rem;
+            color: var(--secondary);
+            padding: 1.5rem;
+            text-align: center;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+            position: relative;
+        }
+
+        .search-header i {
+            margin-right: 10px;
+            color: var(--accent);
+        }
+
+        .search-results {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.8);
+        }
+
+        .search-item {
+            margin-bottom: 20px;
+            padding: 1.5rem;
+            border-bottom: 1px solid #eee;
+            background: white;
+            border-radius: 0.8rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+
+        .search-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .search-title {
+            color: #3385ff;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+        }
+
+        .search-title:hover {
+            text-decoration: underline;
+            color: var(--primary);
+        }
+
+        .search-url {
+            color: #999;
+            font-size: 0.85rem;
+            margin-bottom: 0.8rem;
+            font-family: monospace;
+        }
+
+        .search-snippet {
+            color: #333;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+            background: rgba(255,255,255,0.8);
+            border-radius: 0.8rem;
+            margin: 1rem;
+        }
+
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #3385ff;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #ff4d4f;
+            text-align: center;
+            padding: 20px;
+            display: none;
+            background: rgba(255,255,255,0.8);
+            border-radius: 0.8rem;
+            margin: 1rem;
+        }
+
+        .search-controls {
+            padding: 1rem;
+            display: flex;
+            gap: 1rem;
+            border-bottom: 1px solid #eee;
+            background: rgba(255,255,255,0.9);
+        }
+
+        .search-engine-select {
+            flex: 1;
+            padding: 0.7rem;
+            border-radius: 0.5rem;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .search-engine-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+
+        .close-search {
+            background: #ff4d4f;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0 1.2rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+        }
+
+        .close-search:hover {
+            background: #ff7875;
+            transform: translateY(-1px);
+        }
+
+        .close-search i {
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 左侧谣言检测系统 -->
+    <div class="detection-container">
+        <div class="chat-header">
+            <i class="fas fa-robot"></i> 智能伪造（谣言）检测助手
+        </div>
+
+        <div class="chat-messages" id="messages">
+            <!-- 初始欢迎消息 -->
+            <div class="message bot-message">
+                <span>我已准备好为你检测伪造内容～</span>
+                <span class="timestamp">{{ now().strftime('%H:%M') }}</span>
+            </div>
+
+            <!-- 用户输入展示 -->
+            {% if inputs %}
+            {% for input_type, content in inputs %}
+            <div class="message user-message">
+                {% if input_type == 'text' %}
+                <span>{{ content }}</span>
+                {% else %}
+                <span>已上传{{ input_type }}文件进行检测</span>
+                {% endif %}
+                <span class="timestamp">{{ now().strftime('%H:%M') }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- 检测结果展示 -->
+            {% if results %}
+            {% for result in results %}
+            <div class="message bot-message">
+                <strong>检测结论：</strong>{{ result }}
+                <div class="confidence-meter">
+                    <div style="width:85%"></div>
+                </div>
+                <span class="timestamp">{{ now().strftime('%H:%M') }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- 详细分析报告 -->
+            {% if analysis %}
+            {% for item in analysis %}
+            <div class="message bot-message">
+                <i class="fas fa-info-circle"></i> {{ item }}
+                <span class="timestamp">{{ now().strftime('%H:%M') }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="chat-input-area">
+            <div class="upload-area">
+                <textarea name="text" id="detection-text" placeholder="📝 输入需要检测的文本内容..."
+                    onmouseover="this.placeholder='例如：吃荔枝会得脑炎？喝可乐杀精？'"
+                    onmouseout="this.placeholder='📝 输入需要检测的文本内容...'"></textarea>
+                <div class="file-input">
+                    <input type="file" name="file" id="real-file">
+                    <label class="custom-file-button" for="real-file">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        选择文件（图片/视频）
+                    </label>
+                    <div class="file-selected" id="file-selected-info"></div>
+                </div>
+            </div>
+            <button type="button" id="send-button">
+                <i class="fas fa-search"></i>
+                立即检测
+            </button>
+        </div>
+    </div>
+
+    <!-- 右侧搜索系统 -->
+    <div class="search-container" id="search-container">
+        <div class="search-controls">
+            <select class="search-engine-select" id="search-engine">
+                <option value="baidu">百度搜索</option>
+                <option value="google">谷歌搜索</option>
+                <option value="bing">必应搜索</option>
+            </select>
+            <button class="close-search" id="close-search">
+                <i class="fas fa-times"></i>关闭
+            </button>
+        </div>
+        <div class="search-header">
+            <i class="fas fa-search"></i> 深度检索结果
+        </div>
+        <div class="loading" id="search-loading">
+            <div class="spinner"></div>
+            <p>正在搜索中...</p>
+        </div>
+        <div class="error" id="search-error" style="display: none;"></div>
+        <div class="search-results" id="search-results">
+            <!-- 搜索结果将在这里显示 -->
+        </div>
+    </div>
+
+    <div class="bg-pattern"></div>
+
+    <script>
+        // 自动滚动到底部
+        function scrollToBottom() {
+            const messages = document.getElementById('messages');
+            messages.scrollTop = messages.scrollHeight;
+        }
+        scrollToBottom();
+
+        // 文件上传相关逻辑
+        const uploadArea = document.querySelector('.upload-area');
+        const fileInput = document.getElementById('real-file');
+        const fileSelectedInfo = document.getElementById('file-selected-info');
+        const sendButton = document.getElementById('send-button');
+        const detectionText = document.getElementById('detection-text');
+
+        // 搜索系统相关元素
+        const searchContainer = document.getElementById('search-container');
+        const searchResults = document.getElementById('search-results');
+        const searchLoading= document.getElementById('search-loading');
+        const searchError = document.getElementById('search-error');
+        const closeSearchBtn = document.getElementById('close-search');
+        const searchEngineSelect = document.getElementById('search-engine');
+
+        // DeepSeek API密钥
+        const DEEPSEEK_API_KEY = 'sk-58652c7be96e49f9becf32830b488927';
+        let searchTab = null;
+
+        // 更新文件选择信息
+        function updateFileSelectedInfo() {
+            if (fileInput.files.length > 0) {
+                fileSelectedInfo.textContent = `已选择 ${fileInput.files.length} 个文件`;
+                fileSelectedInfo.style.display = 'block';
+            } else {
+                fileSelectedInfo.style.display = 'none';
+            }
+        }
+
+        // 拖拽上传功能
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            fileInput.files = e.dataTransfer.files;
+            updateFileSelectedInfo();
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) {
+                uploadArea.style.borderColor = '#00CEC9';
+                setTimeout(() => uploadArea.style.borderColor = '#4A90E2', 2000);
+                updateFileSelectedInfo();
+            }
+        });
+
+        // 发送检测请求
+        sendButton.addEventListener('click', function() {
+            const text = detectionText.value.trim();
+            const formData = new FormData();
+
+            if (text) {
+                formData.append('text', text);
+                // 激活搜索系统
+                activateSearchSystem(text);
+            }
+
+            if (fileInput.files.length > 0) {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    formData.append('file', fileInput.files[i]);
+                }
+            }
+
+            if (text || fileInput.files.length > 0) {
+                fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 处理检测结果...
+                    const resultMessage = document.createElement('div');
+                    resultMessage.classList.add('message', 'bot-message');
+                    resultMessage.innerHTML = `<strong>检测结论：</strong>${data.result}<div class="confidence-meter"><div style="width:85%"></div></div><span class="timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+                    messages.appendChild(resultMessage);
+
+                    if (data.analysis) {
+                        const analysisLines = data.analysis.split('\n');
+                        analysisLines.forEach(line => {
+                            const analysisMessage = document.createElement('div');
+                            analysisMessage.classList.add('message', 'bot-message');
+                            analysisMessage.innerHTML = `<i class="fas fa-info-circle"></i> ${line}<span class="timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+                            messages.appendChild(analysisMessage);
+                        });
+                    }
+
+                    scrollToBottom();
+                })
+                .catch(error => {
+                    console.error('检测请求失败:', error);
+                });
+            }
+        });
+
+        // 激活搜索系统
+        function activateSearchSystem(query) {
+            // 显示搜索面板
+            searchContainer.classList.add('active');
+
+            // 清空之前的结果
+            searchResults.innerHTML = '';
+            searchError.style.display = 'none';
+            searchLoading.style.display = 'block';
+
+            // 准备搜索URL但不立即打开
+            const searchEngine = searchEngineSelect.value;
+            let searchUrl;
+
+            switch(searchEngine) {
+                case 'baidu':
+                    searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`;
+                    break;
+                case 'google':
+                    searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+                    break;
+                case 'bing':
+                    searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+                    break;
+                default:
+                    searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`;
+            }
+
+            // 使用DeepSeek API获取搜索结果
+            fetchDeepSeekResults(query, searchUrl);
+        }
+
+        // 使用DeepSeek API获取搜索结果
+        async function fetchDeepSeekResults(query, searchUrl) {
+            const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "deepseek-chat",
+                        messages: [
+                            {
+                                role: "user",
+                                content: `请为我搜索关于"${query}"的最新真实信息，并以严格的JSON格式返回7个最相关的结果，每个结果必须包含title、url和snippet三个字段。title是标题，url是来源链接，snippet是内容摘要。请确保所有信息都是真实准确的，来源链接要真实有效。`
+                            }
+                        ],
+                        temperature: 0.7,
+                        response_format: { type: "json_object" }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // 解析API返回的JSON数据
+                if (data.choices && data.choices[0].message.content) {
+                    try {
+                        const content = data.choices[0].message.content;
+                        // 尝试提取JSON部分
+                        const jsonStart = content.indexOf('{');
+                        const jsonEnd = content.lastIndexOf('}') + 1;
+                        const jsonString = content.slice(jsonStart, jsonEnd);
+
+                        const parsedData = JSON.parse(jsonString);
+                        let results = [];
+
+                        // 尝试从不同结构中提取结果
+                        if (Array.isArray(parsedData)) {
+                            results = parsedData;
+                        } else if (parsedData.results && Array.isArray(parsedData.results)) {
+                            results = parsedData.results;
+                        } else if (parsedData.data && Array.isArray(parsedData.data)) {
+                            results = parsedData.data;
+                        } else if (parsedData.items && Array.isArray(parsedData.items)) {
+                            results = parsedData.items;
+                        }
+
+                        if (results.length > 0) {
+                            displaySearchResults(results);
+                            // 在获取到结果后，才打开新标签页并立即关闭
+                            searchTab = window.open(searchUrl, '_blank');
+                            setTimeout(() => {
+                                if (searchTab && !searchTab.closed) {
+                                    searchTab.close();
+                                }
+                            }, 100);
+                        } else {
+                            throw new Error('API返回的结果格式不符合预期');
+                        }
+                    } catch (e) {
+                        console.error('解析API响应失败:', e);
+                        showSearchError('解析搜索结果时出错，请重试');
+                    }
+                } else {
+                    throw new Error('API响应格式不符合预期');
+                }
+            } catch (error) {
+                console.error('获取搜索结果时出错:', error);
+                showSearchError('获取搜索结果时出错: ' + error.message);
+            } finally {
+                searchLoading.style.display = 'none';
+            }
+        }
+
+        // 显示搜索结果
+        function displaySearchResults(results) {
+            searchResults.innerHTML = '';
+
+            if (!results || results.length === 0) {
+                searchResults.innerHTML = '<p>没有找到相关结果。</p>';
+                return;
+            }
+
+            results.forEach(result => {
+                const resultElement = document.createElement('div');
+                resultElement.className = 'search-item';
+
+                const titleElement = document.createElement('a');
+                titleElement.className = 'search-title';
+                titleElement.href = result.url || '#';
+                titleElement.textContent = result.title || '无标题';
+                titleElement.target = '_blank';
+
+                const urlElement = document.createElement('div');
+                urlElement.className = 'search-url';
+                urlElement.textContent = result.url || '无URL';
+
+                const snippetElement = document.createElement('div');
+                snippetElement.className = 'search-snippet';
+                snippetElement.textContent = result.snippet || '无内容摘要';
+
+                resultElement.appendChild(titleElement);
+                resultElement.appendChild(urlElement);
+                resultElement.appendChild(snippetElement);
+
+                searchResults.appendChild(resultElement);
+            });
+        }
+
+        // 显示搜索错误
+        function showSearchError(message) {
+            searchError.textContent = message;
+            searchError.style.display = 'block';
+            searchResults.innerHTML = '';
+        }
+
+        // 关闭搜索面板
+        closeSearchBtn.addEventListener('click', function() {
+            searchContainer.classList.remove('active');
+        });
+
+        // 按Enter键触发检测
+        detectionText.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+
+        // 初始化文件选择显示
+        updateFileSelectedInfo();
+
+        // 页面加载时检查是否需要显示搜索面板
+       document.addEventListener('DOMContentLoaded', function() {
+    // 从模板变量获取show_search参数
+    const showSearch = '{{ show_search }}' === 'true';
+
+    if (showSearch) {
+        // 获取输入文本
+        const inputs = JSON.parse('{{ inputs|tojson|safe }}');
+        let textContent = '';
+
+        // 查找文本输入
+        for (const input of inputs) {
+            if (input[0] === 'text') {
+                textContent = input[1];
+                break;
+            }
+        }
+
+        if (textContent) {
+            // 立即显示搜索面板并开始搜索
+            searchContainer.classList.add('active');
+            searchLoading.style.display = 'block';
+
+            // 准备搜索URL
+            const searchEngine = searchEngineSelect.value;
+            let searchUrl;
+
+            switch(searchEngine) {
+                case 'baidu':
+                    searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(textContent)}`;
+                    break;
+                case 'google':
+                    searchUrl = `https://www.google.com/search?q=${encodeURIComponent(textContent)}`;
+                    break;
+                case 'bing':
+                    searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(textContent)}`;
+                    break;
+                default:
+                    searchUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(textContent)}`;
+            }
+
+            // 使用DeepSeek API获取搜索结果
+            fetchDeepSeekResults(textContent, searchUrl);
+        }
+    }
+});
+
+    </script>
+</body>
+</html>

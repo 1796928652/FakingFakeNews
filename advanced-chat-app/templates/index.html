@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谣言伪造（检测） - 智能卫士</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4A90E2;
+            --secondary: #6C5CE7;
+            --accent: #00CEC9;
+        }
+
+        body {
+            font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e6f0ff 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .bg-pattern {
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            background:
+                radial-gradient(circle at 10% 20%, rgba(74,144,226,0.1) 0%, transparent 50%),
+                radial-gradient(circle at 90% 80%, rgba(108,92,231,0.1) 0%, transparent 50%);
+            animation: float 20s infinite linear;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0,0); }
+            33% { transform: translate(-5%,5%); }
+            66% { transform: translate(5%,-5%); }
+            100% { transform: translate(0,0); }
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.3s;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        h1 {
+            color: var(--secondary);
+            font-size: 2.2rem;
+            margin-bottom: 1.2rem;
+            position: relative;
+            display: inline-block;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .greeting {
+            font-size: 1.3rem;
+            color: #666;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--primary);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            background: rgba(74,144,226,0.05);
+            transform: scale(1.02);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--accent);
+            background: rgba(0,206,201,0.05);
+        }
+
+        textarea {
+            width: 90%;
+            padding: 1.2rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 0.8rem;
+            resize: vertical;
+            font-size: 1rem;
+            transition: all 0.3s;
+            min-height: 120px;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(74,144,226,0.2);
+        }
+
+        .file-input {
+            position: relative;
+            margin: 1.5rem 0;
+        }
+
+        .file-input input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-button {
+            background: var(--primary);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 0.6rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.8rem;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .custom-file-button:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108,92,231,0.3);
+        }
+
+        .submit-button {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 1rem;
+            border: none;
+            border-radius: 0.8rem;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            width: 100%;
+        }
+
+        .submit-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(74,144,226,0.3);
+        }
+
+        .feature-badge {
+            position: absolute;
+            top: -15px;
+            right: -15px;
+            background: var(--accent);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 12px rgba(0,206,201,0.3);
+        }
+
+        .file-selected {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--secondary);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    <div class="container">
+        <div class="feature-badge">AI 4.0 智能检测</div>
+        <h1>网络伪造（谣言）检测系统</h1>
+        <p class="greeting">
+            <i class="fas fa-comment-dots"></i>
+            {{ greeting }}
+        </p>
+
+        <form method="post" enctype="multipart/form-data" id="detection-form" onsubmit="return prepareForm()">
+            <div class="upload-area">
+                <textarea name="text" id="detection-text" placeholder="📝 输入需要检测的文本内容..."
+                    onmouseover="this.placeholder='例如：吃荔枝会得脑炎？喝可乐杀精？'"
+                    onmouseout="this.placeholder='📝 输入需要检测的文本内容...'"></textarea>
+
+                <div class="file-input">
+                    <input type="file" name="file" id="real-file">
+                    <label class="custom-file-button" for="real-file">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        选择文件（图片/视频）
+                    </label>
+                    <div class="file-selected" id="file-selected-info"></div>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-button">
+                <i class="fas fa-search"></i>
+                立即检测
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const uploadArea = document.querySelector('.upload-area');
+        const fileInput = document.getElementById('real-file');
+        const fileSelectedInfo = document.getElementById('file-selected-info');
+
+        // 拖拽上传功能
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            fileInput.files = e.dataTransfer.files;
+            updateFileSelectedInfo();
+        });
+
+        fileInput.addEventListener('change', () => {
+            if(fileInput.files.length) {
+                uploadArea.style.borderColor = '#00CEC9';
+                setTimeout(() => uploadArea.style.borderColor = '#4A90E2', 2000);
+                updateFileSelectedInfo();
+            }
+        });
+
+        function updateFileSelectedInfo() {
+            if (fileInput.files.length > 0) {
+                fileSelectedInfo.textContent = `已选择 ${fileInput.files.length} 个文件`;
+                fileSelectedInfo.style.display = 'block';
+            } else {
+                fileSelectedInfo.style.display = 'none';
+            }
+        }
+
+        function prepareForm() {
+            const text = document.getElementById('detection-text').value.trim();
+            if (text) {
+                // 添加隐藏字段标记有文本输入
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'has_text';
+                hiddenInput.value = 'true';
+                document.getElementById('detection-form').appendChild(hiddenInput);
+            }
+            return true;
+        }
+
+        // 按Enter键触发提交
+        document.getElementById('detection-text').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('detection-form').submit();
+            }
+        });
+    </script>
+</body>
+</html>
